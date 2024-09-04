@@ -9,9 +9,7 @@ import base64
 from docx import Document  
 from docx.shared import Pt  
 import fitz  # PyMuPDF  
-import win32com.client  # For Windows PPT to PDF conversion  
 import os  
-import pythoncom  # For proper COM initialization  
 import cv2  
 import numpy as np  
   
@@ -20,6 +18,73 @@ azure_endpoint = "https://gpt-4omniwithimages.openai.azure.com/"
 api_key = "6e98566acaf24997baa39039b6e6d183"  
 api_version = "2024-02-01"  
 model = "GPT-40-mini"  
+  
+# Azure Graph API credentials  
+GRAPH_TENANT_ID = "4d4343c6-067a-4794-91f3-5cb10073e5b4"  
+GRAPH_CLIENT_ID = "5ace14db-3235-4cd2-acfd-dd5ef19d6ea1"  
+GRAPH_CLIENT_SECRET = "HRk8Q~7G6EH3.yhDC3rB5wLAyAixQMnQNWNyUdsW"  
+PDF_SITE_ID = "marketingai.sharepoint.com,b82dbaac-09cc-4539-ad08-e4ca926796e8,7b756d20-3463-44b7-95ca-5873f8c3f517"  
+  
+# Function to get OAuth2 token  
+def get_oauth2_token():  
+    url = f"https://login.microsoftonline.com/{GRAPH_TENANT_ID}/oauth2/v2.0/token"  
+    headers = {  
+        'Content-Type': 'application/x-www-form-urlencoded'  
+    }  
+    data = {  
+        'grant_type': 'client_credentials',  
+        'client_id': GRAPH_CLIENT_ID,  
+        'client_secret': GRAPH_CLIENT_SECRET,  
+        'scope': 'https://graph.microsoft.com/.default'  
+    }  
+    response = requests.post(url, headers=headers, data=data)  
+    if response.status_code == 200:  
+        return response.json().get('access_token')  
+    else:  
+        st.error(f"Failed to obtain OAuth2 token: {response.content}")  
+        return None  
+  
+# Function to upload file to SharePoint  
+def upload_file_to_sharepoint(token, file_path):  
+    with open(file_path, "rb") as file:  
+        upload_url = f"https://graph.microsoft.com/v1.0/sites/{PDF_SITE_ID}/drive/root:/{os.path.basename(file_path)}:/content"  
+        headers = {  
+            'Authorization': f'Bearer {token}',  
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation'  
+        }  
+        response = requests.put(upload_url, headers=headers, data=file.read())  
+        if response.status_code == 201:  
+            return response.json().get('id')  
+        else:  
+            st.error(f"Failed to upload file to SharePoint: {response.content}")  
+            return None  
+  
+# Function to convert file to PDF using Microsoft Graph API  
+def convert_file_to_pdf(token, file_id):  
+    convert_url = f"https://graph.microsoft.com/v1.0/sites/{PDF_SITE_ID}/drive/items/{file_id}/content?format=pdf"  
+    headers = {  
+        'Authorization': f'Bearer {token}',  
+        'Content-Type': 'application/json'  
+    }  
+    response = requests.get(convert_url, headers=headers)  
+    if response.status_code == 200:  
+        return response.content  
+    else:  
+        st.error(f"Failed to convert file to PDF: {response.content}")  
+        return None  
+  
+# Function to delete file from SharePoint  
+def delete_file_from_sharepoint(token, file_id):  
+    delete_url = f"https://graph.microsoft.com/v1.0/sites/{PDF_SITE_ID}/drive/items/{file_id}"  
+    headers = {  
+        'Authorization': f'Bearer {token}'  
+    }  
+    response = requests.delete(delete_url, headers=headers)  
+    if response.status_code == 204:  
+        return True  
+    else:  
+        st.error(f"Failed to delete file from SharePoint: {response.content}")  
+        return False  
   
 # Function to encode image as base64  
 def encode_image(image):  
@@ -58,18 +123,17 @@ def get_image_explanation(base64_image):
         return None  
   
 def ppt_to_pdf(ppt_file, pdf_file):  
-    try:  
-        pythoncom.CoInitialize()  # Initialize COM library  
-        powerpoint = win32com.client.Dispatch("PowerPoint.Application")  
-        powerpoint.Visible = 1  
-        ppt = powerpoint.Presentations.Open(os.path.abspath(ppt_file))  
-        ppt.SaveAs(os.path.abspath(pdf_file), 32)  # 32 for ppt to pdf  
-        ppt.Close()  
-        powerpoint.Quit()  
-    except Exception as e:  
-        st.error(f"Failed to convert PPT to PDF: {e}")  
-    finally:  
-        pythoncom.CoUninitialize()  # Uninitialize COM library  
+    token = get_oauth2_token()  
+    if token:  
+        file_id = upload_file_to_sharepoint(token, ppt_file)  
+        if file_id:  
+            pdf_content = convert_file_to_pdf(token, file_id)  
+            if pdf_content:  
+                with open(pdf_file, "wb") as pdf_file:  
+                    pdf_file.write(pdf_content)  
+                delete_file_from_sharepoint(token, file_id)  
+                return True  
+    return False  
   
 def extract_text_from_ppt(ppt_file):  
     presentation = Presentation(ppt_file)  
@@ -296,10 +360,7 @@ def main():
         # Convert PPT to PDF  
         with open("temp_ppt.pptx", "wb") as f:  
             f.write(uploaded_ppt.read())  
-        ppt_to_pdf("temp_ppt.pptx", "temp_pdf.pdf")  
-  
-        # Check if PDF conversion was successful  
-        if not os.path.exists("temp_pdf.pdf"):  
+        if not ppt_to_pdf("temp_ppt.pptx", "temp_pdf.pdf"):  
             st.error("PDF conversion failed. Please check the uploaded PPT file.")  
             return  
   
