@@ -122,9 +122,9 @@ def generate_text_insights(text_content, visual_slides):
         prompt = f"""  
         Aspects of the present disclosure may include insights extracted from the above slide content.   
         The information should be delivered directly and engagingly in a single, coherent paragraph.   
-        Avoid phrases like 'The slide presents,' 'discusses,' 'outlines,' or 'content.'   
-        The explanation should be concise and semantically meaningful, summarizing all major points in one paragraph without line breaks or bullet points.   
-        The text should adhere to the following style guidelines:   
+        Avoid phrases like 'The slide presents,' 'discusses,' 'outlines,' or 'content.'  
+        The explanation should be concise and semantically meaningful, summarizing all major points in one paragraph without line breaks or bullet points.  
+        The text should adhere to the following style guidelines:  
         1. Remove all listed profanity words.  
         2. Use passive voice.  
         3. Use conditional and tentative language, such as "may include," "in some aspects," and "aspects of the present disclosure."  
@@ -136,7 +136,6 @@ def generate_text_insights(text_content, visual_slides):
         9. Replace the phrase "further development" with "our disclosure" in all generated content.  
         10. Make sure to use LaTeX formatting for all mathematical symbols, equations, subscripting, and superscripting to ensure they are displayed correctly in the output.  
         11. When encountering programmatic terms or equations, ensure they are accurately represented and contextually retained.  
-          
         {slide_text}  
         """  
         data = {  
@@ -190,6 +189,12 @@ def aggregate_content(text_insights, image_insights):
             })  
     return aggregated_content  
   
+def sanitize_text(text):  
+    if text:  
+        sanitized = ''.join(c for c in text if c.isprintable() and c not in {'\x00', '\x01', '\x02', '\x03', '\x04', '\x05', '\x06', '\x07', '\x08', '\x0B', '\x0C', '\x0E', '\x0F', '\x10', '\x11', '\x12', '\x13', '\x14', '\x15', '\x16', '\x17', '\x18', '\x19', '\x1A', '\x1B', '\x1C', '\x1D', '\x1E', '\x1F'})  
+        return sanitized  
+    return text  
+  
 def save_content_to_word(aggregated_content, output_file_name, extracted_images):  
     doc = Document()  
     style = doc.styles['Normal']  
@@ -201,9 +206,11 @@ def save_content_to_word(aggregated_content, output_file_name, extracted_images)
     paragraph_format.alignment = 3  # Justify  
   
     for slide in aggregated_content:  
-        doc.add_heading(f"[[{slide['slide_number']}, {slide['slide_title']}]]", level=1)  
-        if slide['content']:  # Only add content if it exists  
-            doc.add_paragraph(slide['content'])  
+        sanitized_title = sanitize_text(slide['slide_title'])  
+        sanitized_content = sanitize_text(slide['content'])  
+        doc.add_heading(f"[[{slide['slide_number']}, {sanitized_title}]]", level=1)  
+        if sanitized_content:  # Only add content if it exists  
+            doc.add_paragraph(sanitized_content)  
   
     # Add extracted images after the generated content  
     if extracted_images:  
@@ -281,6 +288,11 @@ def main():
     if uploaded_ppt is not None:  
         st.info("Processing PPT file...")  
   
+        # Extract the base name of the uploaded PPT file  
+        ppt_filename = uploaded_ppt.name  
+        base_filename = os.path.splitext(ppt_filename)[0]  
+        output_word_filename = f"{base_filename}.docx"  
+  
         # Convert PPT to PDF  
         with open("temp_ppt.pptx", "wb") as f:  
             f.write(uploaded_ppt.read())  
@@ -311,9 +323,9 @@ def main():
         aggregated_content = aggregate_content(text_insights, image_insights)  
   
         st.info("Saving to Word document...")  
-        output_doc = save_content_to_word(aggregated_content, "generated_insights.docx", extracted_images)  
+        output_doc = save_content_to_word(aggregated_content, output_word_filename, extracted_images)  
   
-        st.download_button(label="Download Word Document", data=output_doc, file_name="generated_insights.docx")  
+        st.download_button(label="Download Word Document", data=output_doc, file_name=output_word_filename)  
   
         st.success("Processing completed successfully!")  
   
