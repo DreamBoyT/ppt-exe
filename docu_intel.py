@@ -14,16 +14,16 @@ import cv2
 import numpy as np  
   
 # Azure OpenAI credentials  
-azure_endpoint = "https://gpt-4omniwithimages.openai.azure.com/"  
-api_key = "6e98566acaf24997baa39039b6e6d183"  
-api_version = "2024-02-01"  
-model = "GPT-40-mini"  
+azure_endpoint = 
+api_key = 
+api_version = 
+model =   
   
 # Azure Graph API credentials  
-GRAPH_TENANT_ID = "4d4343c6-067a-4794-91f3-5cb10073e5b4"  
-GRAPH_CLIENT_ID = "5ace14db-3235-4cd2-acfd-dd5ef19d6ea1"  
-GRAPH_CLIENT_SECRET = "HRk8Q~7G6EH3.yhDC3rB5wLAyAixQMnQNWNyUdsW"  
-PDF_SITE_ID = "marketingai.sharepoint.com,b82dbaac-09cc-4539-ad08-e4ca926796e8,7b756d20-3463-44b7-95ca-5873f8c3f517"  
+GRAPH_TENANT_ID = 
+GRAPH_CLIENT_ID = 
+GRAPH_CLIENT_SECRET = 
+PDF_SITE_ID = 
   
 # Function to get OAuth2 token  
 def get_oauth2_token():  
